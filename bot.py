@@ -5,7 +5,6 @@ from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from aiohttp import web
-import os
 
 TOKEN = "8416985600:AAHE2hoG8ciCz2fZGNjrcsSJfbsGJy4Boz4"
 
@@ -296,13 +295,17 @@ def calculate_size(hips, waist):
     elif hips <= 110 and waist <= 82: return "48-50"
     else: return "50-52"
 
-async def main(    app = web.Application()
+async def main():
+    # Код для Render (открывает порт, чтобы сервер не выключался)
+    app = web.Application()
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.environ.get("PORT", 8080))
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    print(f"✅ Порт открыт на {port}")):
+    print(f"✅ Порт открыт на {port}")
+
+    # Запуск самого бота (ОБЯЗАТЕЛЬНО!)
     print("Бот запущен...")
     await dp.start_polling(bot)
 
