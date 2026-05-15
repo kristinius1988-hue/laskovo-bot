@@ -296,19 +296,16 @@ def calculate_size(hips, waist):
     else: return "50-52"
 
 async def main():
-    async def main():
-    # Код для Render
-    app = web.Application()
-    runner = web.AppRunner(app)
-    await runner.setup()
-    port = int(os.environ.get("PORT", 8080))
-    site = web.TCPSite(runner, '0.0.0.0', port)
-    await site.start()
-    print(f"✅ Порт открыт на {port}")
+            app = web.Application()
+            runner = web.AppRunner(app)
+            await runner.setup()
+            port = int(os.environ.get("PORT", 8080))
+            site = web.TCPSite(runner, '0.0.0.0', port)
+            await site.start()
+            print(f"✅ Порт открыт на {port}")
 
-    # Запуск бота
-    print("Бот запущен...")
-    await dp.start_polling(bot)
+            print("Бот запущен...")
+            await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
