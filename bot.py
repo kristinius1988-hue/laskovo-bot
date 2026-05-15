@@ -7,7 +7,6 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKe
 from aiohttp import web
 
 TOKEN = os.getenv("TOKEN")
-...
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
@@ -25,7 +24,7 @@ def load_data():
     return {
         "about_video_id": None, 
         "reviews": [],
-        "comfort_file_id": None  # ← Новое поле для комфорта
+        "comfort_file_id": None
     }
 
 def save_data(data):
@@ -35,7 +34,7 @@ def save_data(data):
 stored_data = load_data()
 ABOUT_VIDEO_FILE_ID = stored_data.get("about_video_id")
 REVIEWS = stored_data.get("reviews", [])
-COMFORT_FILE_ID = stored_data.get("comfort_file_id")  # ← Загружаем ID
+COMFORT_FILE_ID = stored_data.get("comfort_file_id")
 current_review = 0
 
 def get_main_keyboard():
@@ -44,7 +43,7 @@ def get_main_keyboard():
         [InlineKeyboardButton(text="📸 Instagram", url="https://www.instagram.com/laskovo_lingerie/")],
         [InlineKeyboardButton(text="🎁 Получить промокод", callback_data="promo")],
         [InlineKeyboardButton(text="📏 Подобрать размер за 10 секунд", callback_data="size_quiz")],
-        [InlineKeyboardButton(text="🧵 Комфорт и состав", callback_data="comfort")],  # ← НОВАЯ КНОПКА
+        [InlineKeyboardButton(text="🧵 Комфорт и состав", callback_data="comfort")],
         [InlineKeyboardButton(text="💬 Отзывы клиентов", callback_data="reviews")],
         [InlineKeyboardButton(text="📦 Возврат", callback_data="faq")],
         [InlineKeyboardButton(text="ℹ️ О нас", callback_data="about")]
@@ -114,14 +113,13 @@ async def save_review(message: Message):
 @dp.callback_query(lambda c: c.data == "comfort")
 async def process_comfort(callback: CallbackQuery):
     text = (
-        " Комфорт, который не замечаешь\n\n"
-    "✨ Бесшовные — никаких врезавшихся резинок и контуров под одеждой\n"
-    "🤍 Мягкие — ткань не колется и не натирает, как вторая кожа\n"
-    "👗 Невидимые — идеально под белые брюки, лосины, трикотаж и шёлк\n\n"
-    "Забудь о бельё — помни только о комфорте 💛"
+        "✨ Комфорт, который не замечаешь\n\n"
+        "🤍 Бесшовные — никаких врезавшихся резинок и контуров под одеждой\n"
+        "🤍 Мягкие — ткань не колется и не натирает, как вторая кожа\n"
+        " Невидимые — идеально под белые брюки, лосины, трикотаж и шёлк\n\n"
+        "Забудь о бельё — помни только о комфорте 💛\n\n"
         "📋 Состав\n"
         "Полиамид + эластан. Ластовица из 100% хлопка\n\n"
-        
     )
 
     if COMFORT_FILE_ID:
@@ -234,7 +232,7 @@ async def process_sizes(callback: CallbackQuery):
     )
     await callback.answer()
 
-# 👇🏼 ПОДБОР РАЗМЕРА
+# 👇 ПОДБОР РАЗМЕРА
 @dp.callback_query(lambda c: c.data == "size_quiz")
 async def start_size_quiz(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -295,17 +293,20 @@ def calculate_size(hips, waist):
     elif hips <= 110 and waist <= 82: return "48-50"
     else: return "50-52"
 
+# =========================================
+# ГЛАВНАЯ ФУНКЦИЯ ЗАПУСКА (ДЛЯ RENDER)
+# =========================================
 async def main():
-            app = web.Application()
-            runner = web.AppRunner(app)
-            await runner.setup()
-            port = int(os.environ.get("PORT", 8080))
-            site = web.TCPSite(runner, '0.0.0.0', port)
-            await site.start()
-            print(f"✅ Порт открыт на {port}")
+    app = web.Application()
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f"✅ Порт открыт на {port}")
 
-            print("Бот запущен...")
-            await dp.start_polling(bot)
+    print("Бот запущен...")
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
