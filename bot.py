@@ -10,10 +10,10 @@ from aiohttp import web
 
 # 🔍 ПРОВЕРКА ТОКЕНА
 TOKEN = os.getenv("TOKEN")
-if not TOKEN:
-        print("❌ ОШИБКА: TOKEN не найден в Environment Variables!")
+if not TOKEN or len(TOKEN) < 30:
+    print("❌ ОШИБКА: TOKEN пустой или слишком короткий!")
     import time
-    time.sleep(10)  # Программа подождет 10 секунд, и мы увидим сообщение в логах
+    time.sleep(10)
 else:
     print(f"✅ Токен найден: {TOKEN[:20]}...")
 
