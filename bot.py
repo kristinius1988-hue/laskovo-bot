@@ -1,13 +1,27 @@
 import asyncio
 import json
 import os
+import sys
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from aiohttp import web
 
+# 🔍 ПРОВЕРКА ТОКЕНА
 TOKEN = os.getenv("TOKEN")
-bot = Bot(token=TOKEN)
+if not TOKEN:
+    print("❌ ОШИБКА: TOKEN не найден в Environment Variables!")
+    sys.exit(1)
+else:
+    print(f"✅ Токен найден: {TOKEN[:20]}...")
+
+try:
+    bot = Bot(token=TOKEN)
+    print("✅ Бот создан успешно!")
+except Exception as e:
+    print(f"❌ Ошибка при создании бота: {e}")
+    sys.exit(1)
+
 dp = Dispatcher()
 
 # 💾 Файл для сохранения данных
