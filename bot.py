@@ -10,19 +10,22 @@ from aiohttp import web
 
 # 🔍 ПРОВЕРКА ТОКЕНА
 TOKEN = os.getenv("TOKEN")
+print(f"🔍 TOKEN = '{TOKEN}'", flush=True)  # flush=True заставит вывести сразу!
+
 if not TOKEN or len(TOKEN) < 30:
-    print("❌ ОШИБКА: TOKEN пустой или слишком короткий!")
+    print("❌ ОШИБКА: TOKEN пустой или слишком короткий!", flush=True)
     import time
     time.sleep(10)
 else:
-    print(f"✅ Токен найден: {TOKEN[:20]}...")
+    print(f"✅ Токен найден: {TOKEN[:20]}...", flush=True)
 
 try:
     bot = Bot(token=TOKEN)
-    print("✅ Бот создан успешно!")
+    print("✅ Бот создан успешно!", flush=True)
 except Exception as e:
-    print(f"❌ Ошибка при создании бота: {e}")
-    sys.exit(1)
+    print(f"❌ Ошибка при создании бота: {e}", flush=True)
+    import time
+    time.sleep(10)
 
 dp = Dispatcher()
 
