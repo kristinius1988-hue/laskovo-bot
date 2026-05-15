@@ -6,9 +6,9 @@ from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from aiohttp import web
 
-TOKEN = "8416985600:AAGpJZoyWu50zpIOx4_BaTDdIpZacRclq50"
-
-bot = Bot(token="8416985600:AAGpJZoyWu50zpIOx4_BaTDdIpZacRclq50")
+TOKEN = os.getenv("TOKEN")
+...
+bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 # 💾 Файл для сохранения данных
