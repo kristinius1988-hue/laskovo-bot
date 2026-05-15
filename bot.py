@@ -11,8 +11,9 @@ from aiohttp import web
 # 🔍 ПРОВЕРКА ТОКЕНА
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
-    print("❌ ОШИБКА: TOKEN не найден в Environment Variables!")
-    sys.exit(1)
+        print("❌ ОШИБКА: TOKEN не найден в Environment Variables!")
+    import time
+    time.sleep(10)  # Программа подождет 10 секунд, и мы увидим сообщение в логах
 else:
     print(f"✅ Токен найден: {TOKEN[:20]}...")
 
