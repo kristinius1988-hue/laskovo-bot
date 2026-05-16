@@ -59,8 +59,24 @@ def get_main_keyboard():
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
-    if message.from_user.id in user_data: del user_data[message.from_user.id]
-    await message.answer("Добро пожаловать в Ласково! 🌿\nНажимай на кнопку 👇", reply_markup=get_main_keyboard())
+    if message.from_user.id in user_data: 
+        del user_data[message.from_user.id]
+        
+    # 1. Приветствие и главное меню
+    await message.answer(
+        "Добро пожаловать в Ласково! 🌿\nНажимай на кнопку 👇", 
+        reply_markup=get_main_keyboard()
+    )
+    
+    # 2. Инструкция по обновлению (твой текст)
+    await message.answer(
+        "✨ Бот постоянно обновляется!\n"
+        "Мы добавляем новые функции, акции и товары 🎁\n\n"
+        "Чтобы всегда видеть актуальное меню:\n"
+        "1️⃣ Напиши /start — и меню обновится\n"
+        "2️⃣ Или очисти историю чата с ботом и напиши /start\n\n"
+        "Это займёт 5 секунд, а ты всегда будешь в курсе новинок! 💛"
+    )
 
 @dp.callback_query(lambda c: c.data == "contact_support")
 async def start_support(callback: CallbackQuery):
