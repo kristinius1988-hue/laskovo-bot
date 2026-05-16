@@ -25,7 +25,7 @@ else:
 dp = Dispatcher()
 
 # 💾 Файл для сохранения данных
-DATA_FILE = "/tmp/data.json"
+"/tmp/data.json"
 user_data = {}
 
 def load_data():
