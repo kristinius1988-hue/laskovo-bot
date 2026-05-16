@@ -94,7 +94,7 @@ async def handle_support_message(message: Message):
     # Пересылаем сообщение тебе в личку
     await bot.send_message(
         admin_id, 
-        f" Новый вопрос:\n\n{message.text}\n\nID: {message.from_user.id}"
+        f"📩Новый вопрос:\n\n{message.text}\n\nID: {message.from_user.id}"
     )
     await message.answer("✅ Сообщение отправлено! Ждите ответа.")
     
