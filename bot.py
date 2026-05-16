@@ -61,6 +61,7 @@ def get_main_keyboard():
         [InlineKeyboardButton(text="💬 Отзывы клиентов", callback_data="reviews")],
         [InlineKeyboardButton(text="📦 Возврат", callback_data="faq")],
         [InlineKeyboardButton(text="ℹ️ О нас", callback_data="about")],
+        [InlineKeyboardButton(text="🆕 Новинки", callback_data="new_arrivals")],
         [InlineKeyboardButton(text="💬 Написать нам", callback_data="contact_support")],
     ])
 
@@ -349,6 +350,104 @@ def calculate_size(hips, waist):
 # =========================================
 # ГЛАВНАЯ ФУНКЦИЯ ЗАПУСКА (ДЛЯ RENDER)
 # =========================================
+
+# 🔘 КНОПКА "НОВИНКИ"
+@dp.callback_query(lambda c: c.data == "new_arrivals")
+async def show_new_arrivals(callback: CallbackQuery):
+    # Загружаем новинки из файла
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                new_items = data.get("new_arrivals", [])
+                
+                if new_items:
+                    await callback.message.answer("🆕 **Наши новинки**:\n\n")
+                    
+                    # Показываем последние 5 новинок
+                    for item in reversed(new_items[-5:]):
+                        text = f"🌟 {item.get('description', 'Без описания')}\n"
+                        text += f"\n💰 Цена: {item.get('price', 'Уточняйте')}"
+                        if item.get('ozon_link'):
+                            text += f"\n🛒 [Купить на Ozon]({item.get('ozon_link')})"
+                        
+                        # Если есть фото
+                        if item.get('photo_file_id'):
+                            await callback.message.answer_photo(
+                                photo=item.get('photo_file_id'),
+                                caption=text,
+                                parse_mode="Markdown"
+                            )
+                        else:
+                            await callback.message.answer(text, parse_mode="Markdown")
+                        
+                        await asyncio.sleep(0.5)  # Пауза между сообщениями
+                    
+                    await callback.message.answer(
+                        "\n💛 Подпишись на нас, чтобы не пропустить новые поступления!",
+                        reply_markup=get_main_keyboard()
+                    )
+                else:
+                    await callback.message.answer(
+                        "🆕 Новинки скоро появятся!\n\nСледите за обновлениями 💛",
+                        reply_markup=get_main_keyboard()
+                    )
+        except Exception as e:
+            await callback.message.answer("🆕 Новинки скоро появятся!")
+    else:
+        await callback.message.answer("🆕 Новинки скоро появятся!")
+    
+    await callback.answer()
+
+# 📸 ЗАГРУЗКА НОВИНКИ (для админа)
+@dp.message(lambda msg: msg.photo and msg.caption and "#новинка" in msg.caption.lower())
+async def save_new_arrival(message: Message):
+    # Проверяем, что это админ (по ID из ADMIN_ID)
+    admin_id = os.getenv("ADMIN_ID")
+    if str(message.from_user.id) != str(admin_id):
+        return
+    
+    # Получаем фото
+    photo_file_id = message.photo[-1].file_id  # Самое большое фото
+    
+    # Парсим описание из подписи
+    caption = message.caption.replace("#новинка", "").strip()
+           
+    # Ищем ссылку на Ozon
+    ozon_link = ""
+    url_match = re.search(r'(https?://ozon\.ru/\S+)', caption)
+    if url_match:
+        ozon_link = url_match.group(1)
+    
+    # Сохраняем в файл
+    new_item = {
+        "photo_file_id": photo_file_id,
+        "description": caption,
+        "price": price,
+        "ozon_link": ozon_link,
+        "date": message.date.isoformat()
+    }
+    
+    # Загружаем существующие данные
+    data = {}
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except:
+            pass
+    
+    # Добавляем новинку
+    if "new_arrivals" not in data:
+        data["new_arrivals"] = []
+    data["new_arrivals"].append(new_item)
+    
+    # Сохраняем
+    with open(DATA_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    
+    await message.answer("✅ Новинка добавлена!")
+    
 async def main():
     app = web.Application()
     runner = web.AppRunner(app)
