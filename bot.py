@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 import sys
+import re
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
@@ -59,7 +60,8 @@ def get_main_keyboard():
         [InlineKeyboardButton(text="🧵 Комфорт и состав", callback_data="comfort")],
         [InlineKeyboardButton(text="💬 Отзывы клиентов", callback_data="reviews")],
         [InlineKeyboardButton(text="📦 Возврат", callback_data="faq")],
-        [InlineKeyboardButton(text="ℹ️ О нас", callback_data="about")]
+        [InlineKeyboardButton(text="ℹ️ О нас", callback_data="about")],
+        [InlineKeyboardButton(text="💬 Написать нам", callback_data="contact_support")],
     ])
 
 @dp.message(Command("start"))
@@ -305,7 +307,44 @@ def calculate_size(hips, waist):
     elif hips <= 106 and waist <= 77: return "46-48"
     elif hips <= 110 and waist <= 82: return "48-50"
     else: return "50-52"
+#  ОБРАБОТКА НАЖАТИЯ НА КНОПКУ "НАПИСАТЬ НАМ"
+@dp.callback_query(lambda c: c.data == "contact_support")
+async def start_support(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    user_data[user_id] = {"step": "support"}
+    await callback.message.answer("Напишите ваш вопрос. Мы ответим вам сюда! 💛")
+    await callback.answer()
 
+# 📨 ПОЛУЧЕНИЕ СООБЩЕНИЯ ОТ КЛИЕНТА И ПЕРЕСЫЛКА ТЕБЕ
+@dp.message(lambda msg: user_data.get(msg.from_user.id, {}).get("step") == "support")
+async def handle_support_message(message: Message):
+    admin_id = os.getenv("ADMIN_ID")
+    if not admin_id: return
+    
+    # Пересылаем сообщение тебе в личку
+    await bot.send_message(
+        admin_id, 
+        f" Новый вопрос:\n\n{message.text}\n\nID: {message.from_user.id}"
+    )
+    await message.answer("✅ Сообщение отправлено! Ждите ответа.")
+    
+    # Убираем пометку, что клиент в режиме "поддержки"
+    del user_data[message.from_user.id]
+
+# 💬 ТВОЙ ОТВЕТ КЛИЕНТУ (Reply на сообщение)
+@dp.message(lambda msg: msg.reply_to_message and msg.reply_to_message.text and "📩" in msg.reply_to_message.text)
+async def handle_admin_reply(message: Message):
+    import re
+    # Ищем ID клиента в пересланном сообщении
+    match = re.search(r'ID:\s*(\d+)', message.reply_to_message.text)
+    if match:
+        client_id = int(match.group(1))
+        try:
+            # Отправляем твой ответ клиенту
+            await bot.send_message(client_id, message.text)
+            await message.answer("✅ Ответ ушёл клиенту!")
+        except:
+            await message.answer("❌ Не удалось отправить")
 # =========================================
 # ГЛАВНАЯ ФУНКЦИЯ ЗАПУСКА (ДЛЯ RENDER)
 # =========================================
