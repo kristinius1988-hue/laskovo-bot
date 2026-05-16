@@ -405,44 +405,57 @@ async def save_new_arrival(message: Message):
         except:
             pass
     
-    # Добавляем новинку
-    if "new_arrivals" not in data:
-        data["new_arrivals"] = []
-    data["new_arrivals"].append(new_item)
-    
-    # Сохраняем
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    
-    await message.answer("✅ Новинка добавлена!")
-
-# 📸 ЗАГРУЗКА НОВИНКИ (для админа)
-# 📸🎥 ЗАГРУЗКА НОВИНКИ (фото ИЛИ видео)
+   # 📸🎥 ЗАГРУЗКА НОВИНКИ (для админа)
 @dp.message(lambda msg: (msg.photo or msg.video) and msg.caption and "#новинка" in msg.caption.lower())
 async def save_new_arrival(message: Message):
-    # Проверяем, что это админ
+    print(f" Попытка загрузки новинки от {message.from_user.id}")
+    
     admin_id = os.getenv("ADMIN_ID")
     if str(message.from_user.id) != str(admin_id):
         return
-    
-    # Определяем, что отправили: фото или видео
+
     if message.video:
         media_file_id = message.video.file_id
         media_type = "video"
     elif message.photo:
-        media_file_id = message.photo[-1].file_id  # Самое большое фото
+        media_file_id = message.photo[-1].file_id
         media_type = "photo"
     else:
         return
-    
-    # Парсим описание
+
     caption = message.caption.replace("#новинка", "").strip()
     
-    # Ищем цену (если есть)
-    price = ""
-    price_match = re.search(r'цена[:\s]+(\d+)', caption.lower())
-    if price_match:
-        price = f"{price_match.group(1)} ₽"
+    ozon_link = ""
+    import re
+    url_match = re.search(r'(https?://ozon\.ru/\S+)', caption)
+    if url_match:
+        ozon_link = url_match.group(1)
+
+    new_item = {
+        "media_file_id": media_file_id,
+        "media_type": media_type,
+        "description": caption,
+        "ozon_link": ozon_link,
+        "date": message.date.isoformat()
+    }
+
+    data = {}
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except:
+            pass
+
+    if "new_arrivals" not in data:
+        data["new_arrivals"] = []
+    
+    data["new_arrivals"].append(new_item)
+
+    with open(DATA_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    await message.answer("✅ Новинка добавлена!")
     
     # Ищем ссылку на Ozon
     ozon_link = ""
