@@ -4,10 +4,12 @@ import json
 import os
 import sys
 import re
+import sqlite3
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from aiohttp import web
+
 
 # 🔍 ПРОВЕРКА ТОКЕНА
 TOKEN = os.getenv("TOKEN")
@@ -22,10 +24,30 @@ else:
     bot = Bot(token=TOKEN)
     print("✅ Бот создан успешно!", flush=True)
 
+DB_FILE = "laskovo_bot.db"
+
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS new_arrivals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            media_file_id TEXT NOT NULL,
+            media_type TEXT NOT NULL,
+            description TEXT,
+            ozon_link TEXT,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+# Создаём таблицу при запуске
+init_db()
 dp = Dispatcher()
 
 # 💾 Файл для сохранения данных
-DATA_FILE = "/tmp/data.json"
+#DATA_FILE = "/tmp/data.json"
 user_data = {}
 
 def load_data():
