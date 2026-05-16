@@ -472,7 +472,7 @@ async def save_new_arrival(message: Message):
     # Добавляем новинку
     if "new_arrivals" not in data:
         data["new_arrivals"] = []
-    data["
+    data["new_arrivals"].append(new_item)
     
 async def main():
     app = web.Application()
