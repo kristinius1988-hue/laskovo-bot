@@ -99,8 +99,7 @@ async def handle_support_message(message: Message):
     await message.answer("✅ Сообщение отправлено! Ждите ответа.")
     
     # Убираем пометку, что клиент в режиме "поддержки"
-    del user_data[message.from_user.id]
-
+  
 # 💬 ТВОЙ ОТВЕТ КЛИЕНТУ (Reply на сообщение)
 @dp.message(lambda msg: msg.reply_to_message and msg.reply_to_message.text and "📩" in msg.reply_to_message.text)
 async def handle_admin_reply(message: Message):
