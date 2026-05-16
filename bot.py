@@ -17,13 +17,13 @@ print(f" TOKEN = '{TOKEN}'", flush=True)
 
 if not TOKEN or len(TOKEN) < 30:
     print("❌ ОШИБКА: TOKEN пустой или слишком короткий!", flush=True)
-    sys.exit(1) # Останавливаем скрипт, чтобы не было ошибок дальше
+    sys.exit(1)
 else:
     print(f"✅ Токен найден: {TOKEN[:20]}...", flush=True)
-    # Создаем бота
     bot = Bot(token=TOKEN)
     print("✅ Бот создан успешно!", flush=True)
 
+# 💾 НАСТРОЙКА БАЗЫ ДАННЫХ (SQLite)
 DB_FILE = "laskovo_bot.db"
 
 def init_db():
@@ -44,33 +44,14 @@ def init_db():
 
 # Создаём таблицу при запуске
 init_db()
-dp = Dispatcher()
 
-# 💾 Файл для сохранения данных
-#DATA_FILE = "/tmp/data.json"
+dp = Dispatcher()
 user_data = {}
 
-def load_data():
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {
-        "about_video_id": None, 
-        "reviews": [],
-        "comfort_file_id": None
-    }
-
-def save_data(data):
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False)
-
-stored_data = load_data()
-ABOUT_VIDEO_FILE_ID = stored_data.get("about_video_id")
-REVIEWS = stored_data.get("reviews", [])
-COMFORT_FILE_ID = stored_data.get("comfort_file_id")
+# Данные для других разделов (хранятся в памяти, так как их мало)
+ABOUT_VIDEO_FILE_ID = None
+REVIEWS = []
+COMFORT_FILE_ID = None
 current_review = 0
 
 def get_main_keyboard():
@@ -100,7 +81,7 @@ async def cmd_start(message: Message):
         reply_markup=get_main_keyboard()
     )
 
-#  ОБРАБОТКА НАЖАТИЯ НА КНОПКУ "НАПИСАТЬ НАМ"
+# 🔘 ОБРАБОТКА НАЖАТИЯ НА КНОПКУ "НАПИСАТЬ НАМ"
 @dp.callback_query(lambda c: c.data == "contact_support")
 async def start_support(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -114,37 +95,29 @@ async def handle_support_message(message: Message):
     admin_id = os.getenv("ADMIN_ID")
     if not admin_id: return
     
-    # Пересылаем сообщение тебе в личку
     await bot.send_message(
         admin_id, 
         f"📩Новый вопрос:\n\n{message.text}\n\nID: {message.from_user.id}"
     )
     await message.answer("✅ Сообщение отправлено! Ждите ответа.")
-    
-    # Убираем пометку, что клиент в режиме "поддержки"
-  
-# 💬 ТВОЙ ОТВЕТ КЛИЕНТУ (Reply на сообщение)
+
+# 💬 ТВОЙ ОТВЕТ КЛИЕНТУ
 @dp.message(lambda msg: msg.reply_to_message and msg.reply_to_message.text and "📩" in msg.reply_to_message.text)
 async def handle_admin_reply(message: Message):
-    import re
-    # Ищем ID клиента в пересланном сообщении
     match = re.search(r'ID:\s*(\d+)', message.reply_to_message.text)
     if match:
         client_id = int(match.group(1))
         try:
-            # Отправляем твой ответ клиенту
             await bot.send_message(client_id, message.text)
             await message.answer("✅ Ответ ушёл клиенту!")
         except:
             await message.answer("❌ Не удалось отправить")
-            
+
 # 🔧 СОХРАНЕНИЕ ВИДЕО ДЛЯ «О НАС»
 @dp.message(lambda message: message.video and message.caption and "#о_нас" in message.caption)
 async def save_about_video(message: Message):
     global ABOUT_VIDEO_FILE_ID
     ABOUT_VIDEO_FILE_ID = message.video.file_id
-    stored_data["about_video_id"] = ABOUT_VIDEO_FILE_ID
-    save_data(stored_data)
     await message.answer("✅ **Видео для «О нас» сохранено!**")
 
 # 🔧 СОХРАНЕНИЕ КОНТЕНТА ДЛЯ «КОМФОРТ И СОСТАВ»
@@ -155,9 +128,6 @@ async def save_comfort(message: Message):
         COMFORT_FILE_ID = message.photo[-1].file_id
     else:
         COMFORT_FILE_ID = message.video.file_id
-    
-    stored_data["comfort_file_id"] = COMFORT_FILE_ID
-    save_data(stored_data)
     await message.answer("✅ **Раздел «Комфорт» сохранён!**")
 
 # 🔧 СОХРАНЕНИЕ ОТЗЫВА
@@ -180,9 +150,6 @@ async def save_review(message: Message):
         "file_id": file_id,
         "caption": caption_text
     })
-    stored_data["reviews"] = REVIEWS
-    save_data(stored_data)
-    
     await message.answer(f"✅ **Отзыв сохранён!** Всего отзывов: {len(REVIEWS)}")
 
 # 🧵 РАЗДЕЛ «КОМФОРТ И СОСТАВ»
@@ -192,7 +159,7 @@ async def process_comfort(callback: CallbackQuery):
         "✨ Комфорт, который не замечаешь\n\n"
         "🤍 Бесшовные — никаких врезавшихся резинок и контуров под одеждой\n"
         "🤍 Мягкие — ткань не колется и не натирает, как вторая кожа\n"
-        " Невидимые — идеально под белые брюки, лосины, трикотаж и шёлк\n\n"
+        "🤍 Невидимые — идеально под белые брюки, лосины, трикотаж и шёлк\n\n"
         "Забудь о бельё — помни только о комфорте 💛\n\n"
         "📋 Состав\n"
         "Полиамид + эластан. Ластовица из 100% хлопка\n\n"
@@ -205,7 +172,6 @@ async def process_comfort(callback: CallbackQuery):
             await callback.message.answer_video(video=COMFORT_FILE_ID, caption=text)
     else:
         await callback.message.answer(text)
-    
     await callback.answer()
 
 # 💬 ПОКАЗ ОТЗЫВОВ
@@ -370,67 +336,13 @@ def calculate_size(hips, waist):
     else: return "50-52"
 
 # =========================================
-# ГЛАВНАЯ ФУНКЦИЯ ЗАПУСКА (ДЛЯ RENDER)
+# 🆕 БЛОК НОВИНКИ (SQLite)
 # =========================================
 
-# 🔘 КНОПКА "НОВИНКИ"
-# 📸🎥 ЗАГРУЗКА НОВИНКИ (фото ИЛИ видео)
+# 📸 ЗАГРУЗКА НОВИНКИ
 @dp.message(lambda msg: (msg.photo or msg.video) and msg.caption and "#новинка" in msg.caption.lower())
 async def save_new_arrival(message: Message):
-    # Проверяем, что это админ
-    admin_id = os.getenv("ADMIN_ID")
-    if str(message.from_user.id) != str(admin_id):
-        return
-    
-    # Определяем, что отправили: фото или видео
-    if message.video:
-        media_file_id = message.video.file_id
-        media_type = "video"
-    elif message.photo:
-        media_file_id = message.photo[-1].file_id  # Самое большое фото
-        media_type = "photo"
-    else:
-        return
-    
-    # Парсим описание
-    caption = message.caption.replace("#новинка", "").strip()
-    
-    # Ищем цену (если есть)
-    price = ""
-    import re
-    price_match = re.search(r'цена[:\s]+(\d+)', caption.lower())
-    if price_match:
-        price = f"{price_match.group(1)} ₽"
-    
-    # Ищем ссылку на Ozon
-    ozon_link = ""
-    url_match = re.search(r'(https?://ozon\.ru/\S+)', caption)
-    if url_match:
-        ozon_link = url_match.group(1)
-    
-    # Сохраняем
-    new_item = {
-        "media_file_id": media_file_id,
-        "media_type": media_type,  # "photo" или "video"
-        "description": caption,
-        "price": price,
-        "ozon_link": ozon_link,
-        "date": message.date.isoformat()
-    }
-    
-    # Загружаем данные
-    data = {}
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        except:
-            pass
-    
-   # 📸🎥 ЗАГРУЗКА НОВИНКИ (для админа)
-@dp.message(lambda msg: (msg.photo or msg.video) and msg.caption and "#новинка" in msg.caption.lower())
-async def save_new_arrival(message: Message):
-    print(f" Попытка загрузки новинки от {message.from_user.id}")
+    print(f"📩 Получена новинка от {message.from_user.id}")
     
     admin_id = os.getenv("ADMIN_ID")
     if str(message.from_user.id) != str(admin_id):
@@ -448,67 +360,70 @@ async def save_new_arrival(message: Message):
     caption = message.caption.replace("#новинка", "").strip()
     
     ozon_link = ""
-    import re
     url_match = re.search(r'(https?://ozon\.ru/\S+)', caption)
     if url_match:
         ozon_link = url_match.group(1)
 
-    new_item = {
-        "media_file_id": media_file_id,
-        "media_type": media_type,
-        "description": caption,
-        "ozon_link": ozon_link,
-        "date": message.date.isoformat()
-    }
+    # Сохраняем в SQLite
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''INSERT INTO new_arrivals (media_file_id, media_type, description, ozon_link) 
+                      VALUES (?, ?, ?, ?)''', 
+                   (media_file_id, media_type, caption, ozon_link))
+    conn.commit()
+    conn.close()
 
-    data = {}
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        except:
-            pass
+    await message.answer("✅ Новинка сохранена в базу!")
 
-    if "new_arrivals" not in data:
-        data["new_arrivals"] = []
-    
-    data["new_arrivals"].append(new_item)
+# 🔘 КНОПКА "НОВИНКИ" (ПОКАЗ)
+@dp.callback_query(lambda c: c.data == "new_arrivals")
+async def show_new_arrivals(callback: CallbackQuery):
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM new_arrivals ORDER BY id DESC LIMIT 5')
+    new_items = cursor.fetchall()
+    conn.close()
 
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    if new_items:
+        await callback.message.answer("🆕 **Наши новинки**:\n\n")
+        
+        for item in new_items:
+            text = f"🌟 {item['description'] or 'Без описания'}\n"
+            if item['ozon_link']:
+                text += f"\n🛒 [Купить на Ozon]({item['ozon_link']})"
+            
+            if item['media_type'] == "video":
+                await callback.message.answer_video(
+                    video=item['media_file_id'],
+                    caption=text,
+                    parse_mode="Markdown"
+                )
+            else:
+                await callback.message.answer_photo(
+                    photo=item['media_file_id'],
+                    caption=text,
+                    parse_mode="Markdown"
+                )
+            
+            await asyncio.sleep(0.5)
+            
+        await callback.message.answer(
+            "\n💛 Подпишись на нас, чтобы не пропустить новые поступления!",
+            reply_markup=get_main_keyboard()
+        )
+    else:
+        await callback.message.answer(
+            "🆕 Новинки скоро появятся!\n\nСледите за обновлениями 💛",
+            reply_markup=get_main_keyboard()
+        )
+    
+    await callback.answer()
 
-    await message.answer("✅ Новинка добавлена!")
-    
-    # Ищем ссылку на Ozon
-    ozon_link = ""
-    url_match = re.search(r'(https?://ozon\.ru/\S+)', caption)
-    if url_match:
-        ozon_link = url_match.group(1)
-    
-    # Сохраняем
-    new_item = {
-        "media_file_id": media_file_id,
-        "media_type": media_type,
-        "description": caption,
-        "price": price,
-        "ozon_link": ozon_link,
-        "date": message.date.isoformat()
-    }
-    
-    # Загружаем данные
-    data = {}
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        except:
-            pass
-    
-    # Добавляем новинку
-    if "new_arrivals" not in data:
-        data["new_arrivals"] = []
-    data["new_arrivals"].append(new_item)
-    
+# =========================================
+# ГЛАВНАЯ ФУНКЦИЯ ЗАПУСКА
+# =========================================
+
 async def main():
     app = web.Application()
     runner = web.AppRunner(app)
