@@ -90,6 +90,29 @@ async def handle_support_message(message: Message):
     if not admin_id: return
     await bot.send_message(admin_id, f"📩Новый вопрос:\n\n{message.text}\n\nID: {message.from_user.id}")
     await message.answer("✅ Сообщение отправлено! Ждите ответа.")
+    # =========================================
+# 💬 ОТВЕТ АДМИНА ПОЛЬЗОВАТЕЛЮ
+# =========================================
+@dp.message(lambda msg: msg.reply_to_message and str(msg.from_user.id) == str(os.getenv("ADMIN_ID")))
+async def admin_reply(message: Message):
+    """Когда админ отвечает Reply на сообщение с ID"""
+    
+    # Берем текст сообщения, на которое ты отвечаешь
+    original_text = message.reply_to_message.text
+    
+    # Проверяем, есть ли там ID (формат: ID: 123456789)
+    if "ID:" in original_text:
+        user_id = original_text.split("ID:")[-1].strip()
+        
+        try:
+            # Отправляем твой ответ пользователю
+            await bot.send_message(user_id, f"💬 **Ответ поддержки:**\n\n{message.text}")
+            await message.answer("✅ Ответ отправлен клиенту!")
+        except Exception as e:
+            await message.answer(f"❌ Ошибка отправки: {e}")
+    else:
+        # Если отвечаешь не на то сообщение
+        await message.answer("️ Отвечай (Reply) на сообщение, где есть ID пользователя!")
 
 # =========================================
 # 🆕 НОВИНКИ (SUPABASE)
