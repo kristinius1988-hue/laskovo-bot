@@ -55,13 +55,13 @@ def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🛒 Наш магазин на Ozon", url="https://ozon.ru/s/laskovo")],
         [InlineKeyboardButton(text="📸 Instagram", url="https://www.instagram.com/laskovo_lingerie/")],
-        [InlineKeyboardButton(text="🎁 Получить промокод", callback_data="promo")],
+        [InlineKeyboardButton(text=" Получить промокод", callback_data="promo")],
         [InlineKeyboardButton(text="📏 Подобрать размер за 10 секунд", callback_data="size_quiz")],
-        [InlineKeyboardButton(text="🧵 Комфорт и состав", callback_data="comfort")],
+        [InlineKeyboardButton(text=" Комфорт и состав", callback_data="comfort")],
         [InlineKeyboardButton(text="💬 Отзывы клиентов", callback_data="reviews")],
         [InlineKeyboardButton(text="📦 Возврат", callback_data="faq")],
         [InlineKeyboardButton(text="ℹ️ О нас", callback_data="about")],
-        [InlineKeyboardButton(text="🆕 Новинки", callback_data="new_arrivals")],
+        [InlineKeyboardButton(text=" Новинки", callback_data="new_arrivals")],
         [InlineKeyboardButton(text="💬 Написать нам", callback_data="contact_support")],
     ])
 
@@ -79,7 +79,7 @@ async def cmd_start(message: Message):
         "✨ Бот постоянно обновляется!\n"
         "Мы добавляем новые функции, акции и товары 🎁\n\n"
         "Чтобы всегда видеть актуальное меню:\n"
-        "1️⃣ Напиши /start — и меню обновится\n"
+        "1️ Напиши /start — и меню обновится\n"
         "2️⃣ Или очисти историю чата с ботом и напиши /start\n\n"
         "Это займёт 5 секунд, а ты всегда будешь в курсе новинок! 💛"
     )
@@ -153,7 +153,7 @@ async def show_new_arrivals(callback: CallbackQuery):
             return
         await callback.message.answer("🆕 **Наши новинки**:\n\n")
         for item in records:
-            text = f"🌟 {item['description'] or 'Без описания'}\n"
+            text = f" {item['description'] or 'Без описания'}\n"
             if item['ozon_link']: text += f"\n🛒 [Купить на Ozon]({item['ozon_link']})"
             if item['media_type'] == "video":
                 await callback.message.answer_video(video=item['media_file_id'], caption=text, parse_mode="Markdown")
@@ -202,4 +202,218 @@ async def save_comfort(message: Message):
 async def save_review(message: Message):
     caption_text = message.caption.replace("#отзыв", "").strip() or "💬 Отзыв клиентки Ласково"
     file_id = message.photo[-1].file_id if message.photo else message.video.file_id
-    file_type = "
+    file_type = "photo" if message.photo else "video"
+    try:
+        conn = await get_db_conn()
+        await conn.execute("INSERT INTO bot_content (content_type, media_file_id, media_type, description) VALUES ($1, $2, $3, $4)", "review", file_id, file_type, caption_text)
+        await conn.close()
+        await message.answer("✅ Отзыв сохранён в базу навсегда!")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {e}")
+
+# =========================================
+#  ПОКАЗ КОМФОРТ (из базы)
+# =========================================
+@dp.callback_query(lambda c: c.data == "comfort")
+async def process_comfort(callback: CallbackQuery):
+    text = (
+        "✨ Комфорт, который не замечаешь\n\n"
+        "🤍 Бесшовные — никаких врезавшихся резинок и контуров под одеждой\n"
+        "🤍 Мягкие — ткань не колется и не натирает, как вторая кожа\n"
+        "🤍 Невидимые — идеально под белые брюки, лосины, трикотаж и шёлк\n\n"
+        "Забудь о бельё — помни только о комфорте 💛\n\n"
+        " Состав\nПолиамид + эластан. Ластовица из 100% хлопка\n\n"
+    )
+    try:
+        conn = await get_db_conn()
+        record = await conn.fetchrow("SELECT * FROM bot_content WHERE content_type = 'comfort' LIMIT 1")
+        await conn.close()
+        if record:
+            if record['media_type'] == "photo":
+                await callback.message.answer_photo(photo=record['media_file_id'], caption=text)
+            else:
+                await callback.message.answer_video(video=record['media_file_id'], caption=text)
+        else:
+            await callback.message.answer(text)
+    except Exception as e:
+        await callback.message.answer(text)
+    await callback.answer()
+
+# =========================================
+# 💬 ПОКАЗ ОТЗЫВОВ (из базы)
+# =========================================
+@dp.callback_query(lambda c: c.data == "reviews")
+async def show_reviews(callback: CallbackQuery):
+    try:
+        conn = await get_db_conn()
+        records = await conn.fetch("SELECT * FROM bot_content WHERE content_type = 'review' ORDER BY id DESC")
+        await conn.close()
+        if not records:
+            await callback.message.answer("🚧 **Раздел в разработке**.")
+            await callback.answer()
+            return
+        user_data[callback.from_user.id] = {"reviews": records, "current": 0}
+        await show_review_from_db(callback, 0)
+    except Exception as e:
+        await callback.message.answer(f"Ошибка: {e}")
+    await callback.answer()
+
+async def show_review_from_db(callback: CallbackQuery, index: int):
+    user_id = callback.from_user.id
+    reviews = user_data.get(user_id, {}).get("reviews", [])
+    if not reviews or index >= len(reviews): return
+    review = reviews[index]
+    caption = review["description"] or "💬 Отзыв клиентки Ласково"
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
+    nav_buttons = []
+    if index > 0: nav_buttons.append(InlineKeyboardButton(text="← Назад", callback_data="prev_review_db"))
+    if index < len(reviews) - 1: nav_buttons.append(InlineKeyboardButton(text="Вперёд →", callback_data="next_review_db"))
+    if nav_buttons: keyboard.inline_keyboard.append(nav_buttons)
+    keyboard.inline_keyboard.append([InlineKeyboardButton(text="🛒 В магазин", url="https://ozon.ru/s/laskovo")])
+    if review["media_type"] == "photo":
+        await callback.message.answer_photo(photo=review["media_file_id"], caption=caption, reply_markup=keyboard)
+    else:
+        await callback.message.answer_video(video=review["media_file_id"], caption=caption, reply_markup=keyboard)
+
+@dp.callback_query(lambda c: c.data == "next_review_db")
+async def next_review_db(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    reviews = user_data.get(user_id, {}).get("reviews", [])
+    current = user_data.get(user_id, {}).get("current", 0)
+    if current < len(reviews) - 1:
+        user_data[user_id]["current"] = current + 1
+        await callback.message.delete()
+        await show_review_from_db(callback, current + 1)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data == "prev_review_db")
+async def prev_review_db(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    reviews = user_data.get(user_id, {}).get("reviews", [])
+    current = user_data.get(user_id, {}).get("current", 0)
+    if current > 0:
+        user_data[user_id]["current"] = current - 1
+        await callback.message.delete()
+        await show_review_from_db(callback, current - 1)
+    await callback.answer()
+
+# =========================================
+# ℹ️ ПОКАЗ О НАС (из базы)
+# =========================================
+@dp.callback_query(lambda c: c.data == "about")
+async def process_about(callback: CallbackQuery):
+    text = (
+        "🌿 Ласково — бельё, которое мы создаем, а не перепродаем\n\n"
+        " Разработка лекал и пошив тестовых партий\n"
+        "🔹 Примерка на реальных женщинах всех размеров\n"
+        " Внесение корректировок до идеальной посадки\n\n"
+        "✨ Что вы получаете:\n"
+        "• Бесшовные стринги (наборы по 3 шт.) в стильной жестяной упаковке.\n"
+        "• Честные размеры 42–52 без сюрпризов.\n"
+        "• Комфорт, который не замечаешь, но чувствуешь.\n\n"
+        "💛 Наша философия:\n"
+        "«Идеальное бельё — это когда о нём забываешь, но чувствуешь себя в нём невероятно»."
+    )
+    try:
+        conn = await get_db_conn()
+        record = await conn.fetchrow("SELECT * FROM bot_content WHERE content_type = 'about' LIMIT 1")
+        await conn.close()
+        if record:
+            await callback.message.answer_video(video=record['media_file_id'], caption=text)
+        else:
+            await callback.message.answer(text)
+    except Exception as e:
+        await callback.message.answer(text)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data == "promo")
+async def process_promo(callback: CallbackQuery):
+    await callback.message.answer(
+        " Держи свой промокод: LSKV96F8E315\n\n"
+        "Только для подписчиков бота: скидка 5% на весь ассортимент\n"
+        "👉 Перейти в магазин: https://ozon.ru/s/laskovo\n\n"
+        "Просто введи код при оформлении заказа "
+    )
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data == "faq")
+async def process_faq(callback: CallbackQuery):
+    await callback.message.answer(
+        " Отказ и возврат:\n"
+        "Отказаться от заказа можно бесплатно в пункте выдачи — пока не забрали посылку\n\n"
+        "После получения возврат, к сожалению, невозможен: бельё — товар личной гигиены и по закону обмену не подлежит\n\n"
+        "Правильные мерки = идеальный размер 💛"
+    )
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data == "size_quiz")
+async def start_size_quiz(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    user_data[user_id] = {"step": "waiting_hips"}
+    await callback.message.answer(
+        "📏 Подберём размер для вас\n\n"
+        "Напишите обхват бёдер (в см).\n"
+        "Измерьте по самым выступающим точкам.\n\n"
+        "Пример: 96"
+    )
+    await callback.answer()
+
+@dp.message()
+async def process_measurements(message: Message):
+    user_id = message.from_user.id
+    if user_id not in user_data: return
+    try:
+        value = int(message.text)
+        user_step = user_data[user_id].get("step")
+        if user_step == "waiting_hips":
+            if value < 80 or value > 120:
+                await message.answer("Пожалуйста, введите реальный обхват бёдер (от 80 до 120 см).")
+                return
+            user_data[user_id]["hips"] = value
+            user_data[user_id]["step"] = "waiting_waist"
+            await message.answer("Отлично! Теперь напишите обхват талии (в см).\nИзмерьте в самом узком месте.\n\nПример: 68")
+        elif user_step == "waiting_waist":
+            if value < 50 or value > 100:
+                await message.answer("Пожалуйста, введите реальный обхват талии (от 50 до 100 см).")
+                return
+            hips = user_data[user_id]["hips"]
+            waist = value
+            size = calculate_size(hips, waist)
+            text = (
+                f"✨ Ваш идеальный размер: {size}\n\n"
+                f"📏 Ваши параметры:\n• Бёдра: {hips} см\n• Талия: {waist} см\n\n"
+                "📋 Наша размерная сетка:\nРазмер | Талия | Бёдра\n"
+                "42-44 | 63-67 | 92-98\n44-46 | 68-72 | 94-102\n46-48 | 73-77 | 98-106\n"
+                "48-50 | 78-82 | 102-110\n50-52 | 83-87 | 106-114\n\n"
+                " Если параметры попали на границу — берите больший размер.\n\n"
+                "🛒 Посмотреть модели:\nhttps://ozon.ru/s/laskovo"
+            )
+            await message.answer(text, reply_markup=get_main_keyboard())
+            del user_data[user_id]
+    except ValueError:
+        await message.answer("Пожалуйста, введите число (например: 96)")
+
+def calculate_size(hips, waist):
+    if hips <= 98 and waist <= 67: return "42-44"
+    elif hips <= 102 and waist <= 72: return "44-46"
+    elif hips <= 106 and waist <= 77: return "46-48"
+    elif hips <= 110 and waist <= 82: return "48-50"
+    else: return "50-52"
+
+# =========================================
+# ЗАПУСК
+# =========================================
+async def main():
+    await init_db()
+    print("✅ База данных подключена!")
+    app = web.Application()
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f"✅ Порт открыт на {port}")
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
