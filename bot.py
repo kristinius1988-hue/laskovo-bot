@@ -47,7 +47,6 @@ async def log_user_action(user_id: int, username: str, first_name: str, action: 
 
 async def init_db():
     conn = await get_db_conn()
-    # Таблица для новинок
     await conn.execute('''
         CREATE TABLE IF NOT EXISTS new_arrivals (
             id SERIAL PRIMARY KEY,
@@ -58,7 +57,6 @@ async def init_db():
             added_at TIMESTAMP DEFAULT NOW()
         )
     ''')
-    # Единая таблица для всего контента (О нас, Комфорт, Отзывы)
     await conn.execute('''
         CREATE TABLE IF NOT EXISTS bot_content (
             id SERIAL PRIMARY KEY,
@@ -105,7 +103,6 @@ async def cmd_start(message: Message):
         "Это займёт 5 секунд, а ты всегда будешь в курсе новинок! 💛"
     )
     
-    # 📊 Логируем запуск бота
     await log_user_action(
         user_id=message.from_user.id,
         username=message.from_user.username or "Нет username",
@@ -113,9 +110,6 @@ async def cmd_start(message: Message):
         action="Запустил бота (/start)"
     )
 
-# =========================================
-#  СТАТИСТИКА БОТА (только для админа)
-# =========================================
 @dp.message(Command("stats"))
 async def show_stats(message: Message):
     admin_id = os.getenv("ADMIN_ID")
@@ -146,9 +140,6 @@ async def show_stats(message: Message):
     except Exception as e:
         await message.answer(f"❌ Ошибка получения статистики: {e}")
 
-# =========================================
-# 🆕 НОВИНКИ (в базу)
-# =========================================
 @dp.message(lambda msg: (msg.photo or msg.video) and msg.caption and "#новинка" in msg.caption.lower())
 async def save_new_arrival(message: Message):
     admin_id = os.getenv("ADMIN_ID")
@@ -176,7 +167,6 @@ async def save_new_arrival(message: Message):
 
 @dp.callback_query(lambda c: c.data == "new_arrivals")
 async def show_new_arrivals(callback: CallbackQuery):
-    # 📊 Логируем действие
     await log_user_action(
         user_id=callback.from_user.id,
         username=callback.from_user.username or "Нет username",
@@ -206,9 +196,6 @@ async def show_new_arrivals(callback: CallbackQuery):
         await callback.message.answer(f"Ошибка: {e}")
     await callback.answer()
 
-# =========================================
-# 📹 О НАС (в базу)
-# =========================================
 @dp.message(lambda message: message.video and message.caption and "#о_нас" in message.caption)
 async def save_about_video(message: Message):
     try:
@@ -220,9 +207,6 @@ async def save_about_video(message: Message):
     except Exception as e:
         await message.answer(f"❌ Ошибка: {e}")
 
-# =========================================
-# 📸 КОМФОРТ (в базу)
-# =========================================
 @dp.message(lambda message: (message.photo or message.video) and message.caption and "#комфорт" in message.caption)
 async def save_comfort(message: Message):
     media_file_id = message.photo[-1].file_id if message.photo else message.video.file_id
@@ -236,9 +220,7 @@ async def save_comfort(message: Message):
     except Exception as e:
         await message.answer(f"❌ Ошибка: {e}")
 
-# =========================================
-# 💬 ОТЗЫВЫ (в базу)
-# =========================================
+# ✅ ИСПРАВЛЕНО: было msg.video, должно быть message.video
 @dp.message(lambda message: (message.photo or message.video) and message.caption and "#отзыв" in message.caption)
 async def save_review(message: Message):
     caption_text = message.caption.replace("#отзыв", "").strip() or "💬 Отзыв клиентки Ласково"
@@ -252,12 +234,8 @@ async def save_review(message: Message):
     except Exception as e:
         await message.answer(f"❌ Ошибка: {e}")
 
-# =========================================
-# 🧵 ПОКАЗ КОМФОРТ (из базы)
-# =========================================
 @dp.callback_query(lambda c: c.data == "comfort")
 async def process_comfort(callback: CallbackQuery):
-    # 📊 Логируем действие
     await log_user_action(
         user_id=callback.from_user.id,
         username=callback.from_user.username or "Нет username",
@@ -288,12 +266,8 @@ async def process_comfort(callback: CallbackQuery):
         await callback.message.answer(text)
     await callback.answer()
 
-# =========================================
-# 💬 ПОКАЗ ОТЗЫВОВ (из базы)
-# =========================================
 @dp.callback_query(lambda c: c.data == "reviews")
 async def show_reviews(callback: CallbackQuery):
-    # 📊 Логируем действие
     await log_user_action(
         user_id=callback.from_user.id,
         username=callback.from_user.username or "Нет username",
@@ -354,12 +328,8 @@ async def prev_review_db(callback: CallbackQuery):
         await show_review_from_db(callback, current - 1)
     await callback.answer()
 
-# =========================================
-# ℹ️ ПОКАЗ О НАС (из базы)
-# =========================================
 @dp.callback_query(lambda c: c.data == "about")
 async def process_about(callback: CallbackQuery):
-    # 📊 Логируем действие
     await log_user_action(
         user_id=callback.from_user.id,
         username=callback.from_user.username or "Нет username",
@@ -393,7 +363,6 @@ async def process_about(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "promo")
 async def process_promo(callback: CallbackQuery):
-    # 📊 Логируем действие
     await log_user_action(
         user_id=callback.from_user.id,
         username=callback.from_user.username or "Нет username",
@@ -411,7 +380,6 @@ async def process_promo(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "faq")
 async def process_faq(callback: CallbackQuery):
-    # 📊 Логируем действие
     await log_user_action(
         user_id=callback.from_user.id,
         username=callback.from_user.username or "Нет username",
@@ -429,7 +397,6 @@ async def process_faq(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "size_quiz")
 async def start_size_quiz(callback: CallbackQuery):
-    # 📊 Логируем действие
     await log_user_action(
         user_id=callback.from_user.id,
         username=callback.from_user.username or "Нет username",
@@ -489,9 +456,6 @@ def calculate_size(hips, waist):
     elif hips <= 110 and waist <= 82: return "48-50"
     else: return "50-52"
 
-# =========================================
-# ЗАПУСК
-# =========================================
 async def main():
     await init_db()
     print("✅ База данных подключена!")
