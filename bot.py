@@ -37,6 +37,7 @@ async def init_db():
         )
     ''')
     # Единая таблица для всего контента (О нас, Комфорт, Отзывы)
+    # ✅ Добавлена колонка description, чтобы отзывы сохранялись без ошибок
     await conn.execute('''
         CREATE TABLE IF NOT EXISTS bot_content (
             id SERIAL PRIMARY KEY,
@@ -57,12 +58,12 @@ def get_main_keyboard():
         [InlineKeyboardButton(text="📸 Instagram", url="https://www.instagram.com/laskovo_lingerie/")],
         [InlineKeyboardButton(text=" Получить промокод", callback_data="promo")],
         [InlineKeyboardButton(text="📏 Подобрать размер за 10 секунд", callback_data="size_quiz")],
-        [InlineKeyboardButton(text=" Комфорт и состав", callback_data="comfort")],
-        [InlineKeyboardButton(text="💬 Отзывы клиентов", callback_data="reviews")],
+        [InlineKeyboardButton(text="🧵 Комфорт и состав", callback_data="comfort")],
+        [InlineKeyboardButton(text=" Отзывы клиентов", callback_data="reviews")],
         [InlineKeyboardButton(text="📦 Возврат", callback_data="faq")],
         [InlineKeyboardButton(text="ℹ️ О нас", callback_data="about")],
         [InlineKeyboardButton(text=" Новинки", callback_data="new_arrivals")],
-        [InlineKeyboardButton(text="💬 Написать нам", callback_data="contact_support")],
+        # # [InlineKeyboardButton(text="💬 Написать нам", callback_data="contact_support")],  # ЗАКОММЕНТИРОВАНО
     ])
 
 @dp.message(Command("start"))
@@ -79,39 +80,41 @@ async def cmd_start(message: Message):
         "✨ Бот постоянно обновляется!\n"
         "Мы добавляем новые функции, акции и товары 🎁\n\n"
         "Чтобы всегда видеть актуальное меню:\n"
-        "1️ Напиши /start — и меню обновится\n"
+        "1️⃣ Напиши /start — и меню обновится\n"
         "2️⃣ Или очисти историю чата с ботом и напиши /start\n\n"
         "Это займёт 5 секунд, а ты всегда будешь в курсе новинок! 💛"
     )
 
-@dp.callback_query(lambda c: c.data == "contact_support")
-async def start_support(callback: CallbackQuery):
-    user_data[callback.from_user.id] = {"step": "support"}
-    await callback.message.answer("Напишите ваш вопрос. Мы ответим вам сюда! 💛")
-    await callback.answer()
+# ============================================================
+# 🚫 ЗАБЛОКИРОВАНО: Блок поддержки "Написать нам"
+# Чтобы включить обратно, просто убери символы # в начале строк
+# ============================================================
+# @dp.callback_query(lambda c: c.data == "contact_support")
+# async def start_support(callback: CallbackQuery):
+#     user_data[callback.from_user.id] = {"step": "support"}
+#     await callback.message.answer("Напишите ваш вопрос. Мы ответим вам сюда! 💛")
+#     await callback.answer()
 
-@dp.message(lambda msg: user_data.get(msg.from_user.id, {}).get("step") == "support")
-async def handle_support_message(message: Message):
-    admin_id = os.getenv("ADMIN_ID")
-    if not admin_id: return
-    await bot.send_message(admin_id, f"📩Новый вопрос:\n\n{message.text}\n\nID: {message.from_user.id}")
-    await message.answer("✅ Сообщение отправлено! Ждите ответа.")
+# @dp.message(lambda msg: user_data.get(msg.from_user.id, {}).get("step") == "support")
+# async def handle_support_message(message: Message):
+#     admin_id = os.getenv("ADMIN_ID")
+#     if not admin_id: return
+#     await bot.send_message(admin_id, f"📩Новый вопрос:\n\n{message.text}\n\nID: {message.from_user.id}")
+#     await message.answer("✅ Сообщение отправлено! Ждите ответа.")
 
-# =========================================
-# 💬 ОТВЕТ АДМИНА ПОЛЬЗОВАТЕЛЮ
-# =========================================
-@dp.message(lambda msg: msg.reply_to_message and str(msg.from_user.id) == str(os.getenv("ADMIN_ID")))
-async def admin_reply(message: Message):
-    original_text = message.reply_to_message.text
-    if "ID:" in original_text:
-        user_id = original_text.split("ID:")[-1].strip()
-        try:
-            await bot.send_message(user_id, f"💬 **Ответ поддержки:**\n\n{message.text}")
-            await message.answer("✅ Ответ отправлен клиенту!")
-        except Exception as e:
-            await message.answer(f"❌ Ошибка отправки: {e}")
-    else:
-        await message.answer("⚠️ Отвечай (Reply) на сообщение, где есть ID пользователя!")
+# @dp.message(lambda msg: msg.reply_to_message and str(msg.from_user.id) == str(os.getenv("ADMIN_ID")))
+# async def admin_reply(message: Message):
+#     original_text = message.reply_to_message.text
+#     if "ID:" in original_text:
+#         user_id = original_text.split("ID:")[-1].strip()
+#         try:
+#             await bot.send_message(user_id, f"💬 **Ответ поддержки:**\n\n{message.text}")
+#             await message.answer("✅ Ответ отправлен клиенту!")
+#         except Exception as e:
+#             await message.answer(f"❌ Ошибка отправки: {e}")
+#     else:
+#         await message.answer("️ Отвечай (Reply) на сообщение, где есть ID пользователя!")
+# ============================================================
 
 # =========================================
 # 🆕 НОВИНКИ (в базу)
@@ -153,7 +156,7 @@ async def show_new_arrivals(callback: CallbackQuery):
             return
         await callback.message.answer("🆕 **Наши новинки**:\n\n")
         for item in records:
-            text = f" {item['description'] or 'Без описания'}\n"
+            text = f"🌟 {item['description'] or 'Без описания'}\n"
             if item['ozon_link']: text += f"\n🛒 [Купить на Ozon]({item['ozon_link']})"
             if item['media_type'] == "video":
                 await callback.message.answer_video(video=item['media_file_id'], caption=text, parse_mode="Markdown")
@@ -198,7 +201,7 @@ async def save_comfort(message: Message):
 # =========================================
 # 💬 ОТЗЫВЫ (в базу)
 # =========================================
-@dp.message(lambda message: (message.photo or message.video) and message.caption and "#отзыв" in message.caption)
+@dp.message(lambda message: (message.photo or msg.video) and message.caption and "#отзыв" in message.caption)
 async def save_review(message: Message):
     caption_text = message.caption.replace("#отзыв", "").strip() or "💬 Отзыв клиентки Ласково"
     file_id = message.photo[-1].file_id if message.photo else message.video.file_id
@@ -212,7 +215,7 @@ async def save_review(message: Message):
         await message.answer(f"❌ Ошибка: {e}")
 
 # =========================================
-#  ПОКАЗ КОМФОРТ (из базы)
+# 🧵 ПОКАЗ КОМФОРТ (из базы)
 # =========================================
 @dp.callback_query(lambda c: c.data == "comfort")
 async def process_comfort(callback: CallbackQuery):
@@ -329,17 +332,17 @@ async def process_about(callback: CallbackQuery):
 @dp.callback_query(lambda c: c.data == "promo")
 async def process_promo(callback: CallbackQuery):
     await callback.message.answer(
-        " Держи свой промокод: LSKV96F8E315\n\n"
+        "🎉 Держи свой промокод: LSKV96F8E315\n\n"
         "Только для подписчиков бота: скидка 5% на весь ассортимент\n"
         "👉 Перейти в магазин: https://ozon.ru/s/laskovo\n\n"
-        "Просто введи код при оформлении заказа "
+        "Просто введи код при оформлении заказа 💛"
     )
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "faq")
 async def process_faq(callback: CallbackQuery):
     await callback.message.answer(
-        " Отказ и возврат:\n"
+        "📦 Отказ и возврат:\n"
         "Отказаться от заказа можно бесплатно в пункте выдачи — пока не забрали посылку\n\n"
         "После получения возврат, к сожалению, невозможен: бельё — товар личной гигиены и по закону обмену не подлежит\n\n"
         "Правильные мерки = идеальный размер 💛"
@@ -385,7 +388,7 @@ async def process_measurements(message: Message):
                 "📋 Наша размерная сетка:\nРазмер | Талия | Бёдра\n"
                 "42-44 | 63-67 | 92-98\n44-46 | 68-72 | 94-102\n46-48 | 73-77 | 98-106\n"
                 "48-50 | 78-82 | 102-110\n50-52 | 83-87 | 106-114\n\n"
-                " Если параметры попали на границу — берите больший размер.\n\n"
+                "💡 Если параметры попали на границу — берите больший размер.\n\n"
                 "🛒 Посмотреть модели:\nhttps://ozon.ru/s/laskovo"
             )
             await message.answer(text, reply_markup=get_main_keyboard())
