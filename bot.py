@@ -23,6 +23,28 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 async def get_db_conn():
     return await asyncpg.connect(DATABASE_URL)
 
+# =========================================
+# 📊 АНАЛИТИКА: Запись действий пользователя
+# =========================================
+async def log_user_action(user_id: int, username: str, first_name: str, action: str):
+    try:
+        conn = await get_db_conn()
+        existing = await conn.fetchrow("SELECT id, actions_count FROM bot_analytics WHERE user_id = $1", user_id)
+        
+        if existing:
+            await conn.execute(
+                "UPDATE bot_analytics SET last_visit = NOW(), actions_count = $1, last_action = $2 WHERE user_id = $3",
+                existing['actions_count'] + 1, action, user_id
+            )
+        else:
+            await conn.execute(
+                "INSERT INTO bot_analytics (user_id, username, first_name, last_action) VALUES ($1, $2, $3, $4)",
+                user_id, username, first_name, action
+            )
+        await conn.close()
+    except Exception as e:
+        print(f"❌ Ошибка логирования: {e}")
+
 async def init_db():
     conn = await get_db_conn()
     # Таблица для новинок
@@ -37,7 +59,6 @@ async def init_db():
         )
     ''')
     # Единая таблица для всего контента (О нас, Комфорт, Отзывы)
-    # ✅ Добавлена колонка description, чтобы отзывы сохранялись без ошибок
     await conn.execute('''
         CREATE TABLE IF NOT EXISTS bot_content (
             id SERIAL PRIMARY KEY,
@@ -56,14 +77,13 @@ def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🛒 Наш магазин на Ozon", url="https://ozon.ru/s/laskovo")],
         [InlineKeyboardButton(text="📸 Instagram", url="https://www.instagram.com/laskovo_lingerie/")],
-        [InlineKeyboardButton(text=" Получить промокод", callback_data="promo")],
+        [InlineKeyboardButton(text="🎁 Получить промокод", callback_data="promo")],
         [InlineKeyboardButton(text="📏 Подобрать размер за 10 секунд", callback_data="size_quiz")],
         [InlineKeyboardButton(text="🧵 Комфорт и состав", callback_data="comfort")],
-        [InlineKeyboardButton(text=" Отзывы клиентов", callback_data="reviews")],
+        [InlineKeyboardButton(text="💬 Отзывы клиентов", callback_data="reviews")],
         [InlineKeyboardButton(text="📦 Возврат", callback_data="faq")],
         [InlineKeyboardButton(text="ℹ️ О нас", callback_data="about")],
-        [InlineKeyboardButton(text=" Новинки", callback_data="new_arrivals")],
-        # # [InlineKeyboardButton(text="💬 Написать нам", callback_data="contact_support")],  # ЗАКОММЕНТИРОВАНО
+        [InlineKeyboardButton(text="🆕 Новинки", callback_data="new_arrivals")],
     ])
 
 @dp.message(Command("start"))
@@ -84,37 +104,47 @@ async def cmd_start(message: Message):
         "2️⃣ Или очисти историю чата с ботом и напиши /start\n\n"
         "Это займёт 5 секунд, а ты всегда будешь в курсе новинок! 💛"
     )
+    
+    # 📊 Логируем запуск бота
+    await log_user_action(
+        user_id=message.from_user.id,
+        username=message.from_user.username or "Нет username",
+        first_name=message.from_user.first_name or "Аноним",
+        action="Запустил бота (/start)"
+    )
 
-# ============================================================
-# 🚫 ЗАБЛОКИРОВАНО: Блок поддержки "Написать нам"
-# Чтобы включить обратно, просто убери символы # в начале строк
-# ============================================================
-# @dp.callback_query(lambda c: c.data == "contact_support")
-# async def start_support(callback: CallbackQuery):
-#     user_data[callback.from_user.id] = {"step": "support"}
-#     await callback.message.answer("Напишите ваш вопрос. Мы ответим вам сюда! 💛")
-#     await callback.answer()
-
-# @dp.message(lambda msg: user_data.get(msg.from_user.id, {}).get("step") == "support")
-# async def handle_support_message(message: Message):
-#     admin_id = os.getenv("ADMIN_ID")
-#     if not admin_id: return
-#     await bot.send_message(admin_id, f"📩Новый вопрос:\n\n{message.text}\n\nID: {message.from_user.id}")
-#     await message.answer("✅ Сообщение отправлено! Ждите ответа.")
-
-# @dp.message(lambda msg: msg.reply_to_message and str(msg.from_user.id) == str(os.getenv("ADMIN_ID")))
-# async def admin_reply(message: Message):
-#     original_text = message.reply_to_message.text
-#     if "ID:" in original_text:
-#         user_id = original_text.split("ID:")[-1].strip()
-#         try:
-#             await bot.send_message(user_id, f"💬 **Ответ поддержки:**\n\n{message.text}")
-#             await message.answer("✅ Ответ отправлен клиенту!")
-#         except Exception as e:
-#             await message.answer(f"❌ Ошибка отправки: {e}")
-#     else:
-#         await message.answer("️ Отвечай (Reply) на сообщение, где есть ID пользователя!")
-# ============================================================
+# =========================================
+#  СТАТИСТИКА БОТА (только для админа)
+# =========================================
+@dp.message(Command("stats"))
+async def show_stats(message: Message):
+    admin_id = os.getenv("ADMIN_ID")
+    if str(message.from_user.id) != str(admin_id):
+        return
+    
+    try:
+        conn = await get_db_conn()
+        total_users = await conn.fetchval("SELECT COUNT(DISTINCT user_id) FROM bot_analytics")
+        today_users = await conn.fetchval("SELECT COUNT(DISTINCT user_id) FROM bot_analytics WHERE last_visit >= NOW() - INTERVAL '1 day'")
+        total_actions = await conn.fetchval("SELECT SUM(actions_count) FROM bot_analytics")
+        
+        top_actions = await conn.fetch(
+            "SELECT last_action, COUNT(*) as cnt FROM bot_analytics GROUP BY last_action ORDER BY cnt DESC LIMIT 5"
+        )
+        
+        await conn.close()
+        
+        stats_text = f"📊 **Статистика бота Ласково**\n\n"
+        stats_text += f"👥 Всего пользователей: {total_users}\n"
+        stats_text += f"🆕 За сегодня: {today_users}\n"
+        stats_text += f"⚡ Всего действий: {total_actions}\n\n"
+        stats_text += f"🔥 Топ-5 действий:\n"
+        for i, action in enumerate(top_actions, 1):
+            stats_text += f"{i}. {action['last_action']} — {action['cnt']} раз(а)\n"
+        
+        await message.answer(stats_text)
+    except Exception as e:
+        await message.answer(f"❌ Ошибка получения статистики: {e}")
 
 # =========================================
 # 🆕 НОВИНКИ (в базу)
@@ -146,6 +176,14 @@ async def save_new_arrival(message: Message):
 
 @dp.callback_query(lambda c: c.data == "new_arrivals")
 async def show_new_arrivals(callback: CallbackQuery):
+    # 📊 Логируем действие
+    await log_user_action(
+        user_id=callback.from_user.id,
+        username=callback.from_user.username or "Нет username",
+        first_name=callback.from_user.first_name or "Аноним",
+        action="Нажал: Новинки"
+    )
+    
     try:
         conn = await get_db_conn()
         records = await conn.fetch('SELECT * FROM new_arrivals ORDER BY id DESC LIMIT 5')
@@ -201,7 +239,7 @@ async def save_comfort(message: Message):
 # =========================================
 # 💬 ОТЗЫВЫ (в базу)
 # =========================================
-@dp.message(lambda message: (message.photo or msg.video) and message.caption and "#отзыв" in message.caption)
+@dp.message(lambda message: (message.photo or message.video) and message.caption and "#отзыв" in message.caption)
 async def save_review(message: Message):
     caption_text = message.caption.replace("#отзыв", "").strip() or "💬 Отзыв клиентки Ласково"
     file_id = message.photo[-1].file_id if message.photo else message.video.file_id
@@ -219,13 +257,21 @@ async def save_review(message: Message):
 # =========================================
 @dp.callback_query(lambda c: c.data == "comfort")
 async def process_comfort(callback: CallbackQuery):
+    # 📊 Логируем действие
+    await log_user_action(
+        user_id=callback.from_user.id,
+        username=callback.from_user.username or "Нет username",
+        first_name=callback.from_user.first_name or "Аноним",
+        action="Нажал: Комфорт и состав"
+    )
+    
     text = (
         "✨ Комфорт, который не замечаешь\n\n"
         "🤍 Бесшовные — никаких врезавшихся резинок и контуров под одеждой\n"
         "🤍 Мягкие — ткань не колется и не натирает, как вторая кожа\n"
         "🤍 Невидимые — идеально под белые брюки, лосины, трикотаж и шёлк\n\n"
         "Забудь о бельё — помни только о комфорте 💛\n\n"
-        " Состав\nПолиамид + эластан. Ластовица из 100% хлопка\n\n"
+        "📋 Состав\nПолиамид + эластан. Ластовица из 100% хлопка\n\n"
     )
     try:
         conn = await get_db_conn()
@@ -247,6 +293,14 @@ async def process_comfort(callback: CallbackQuery):
 # =========================================
 @dp.callback_query(lambda c: c.data == "reviews")
 async def show_reviews(callback: CallbackQuery):
+    # 📊 Логируем действие
+    await log_user_action(
+        user_id=callback.from_user.id,
+        username=callback.from_user.username or "Нет username",
+        first_name=callback.from_user.first_name or "Аноним",
+        action="Нажал: Отзывы клиентов"
+    )
+    
     try:
         conn = await get_db_conn()
         records = await conn.fetch("SELECT * FROM bot_content WHERE content_type = 'review' ORDER BY id DESC")
@@ -305,11 +359,19 @@ async def prev_review_db(callback: CallbackQuery):
 # =========================================
 @dp.callback_query(lambda c: c.data == "about")
 async def process_about(callback: CallbackQuery):
+    # 📊 Логируем действие
+    await log_user_action(
+        user_id=callback.from_user.id,
+        username=callback.from_user.username or "Нет username",
+        first_name=callback.from_user.first_name or "Аноним",
+        action="Нажал: О нас"
+    )
+    
     text = (
         "🌿 Ласково — бельё, которое мы создаем, а не перепродаем\n\n"
-        " Разработка лекал и пошив тестовых партий\n"
+        "🔹 Разработка лекал и пошив тестовых партий\n"
         "🔹 Примерка на реальных женщинах всех размеров\n"
-        " Внесение корректировок до идеальной посадки\n\n"
+        "🔹 Внесение корректировок до идеальной посадки\n\n"
         "✨ Что вы получаете:\n"
         "• Бесшовные стринги (наборы по 3 шт.) в стильной жестяной упаковке.\n"
         "• Честные размеры 42–52 без сюрпризов.\n"
@@ -331,6 +393,14 @@ async def process_about(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "promo")
 async def process_promo(callback: CallbackQuery):
+    # 📊 Логируем действие
+    await log_user_action(
+        user_id=callback.from_user.id,
+        username=callback.from_user.username or "Нет username",
+        first_name=callback.from_user.first_name or "Аноним",
+        action="Нажал: Получить промокод"
+    )
+    
     await callback.message.answer(
         "🎉 Держи свой промокод: LSKV96F8E315\n\n"
         "Только для подписчиков бота: скидка 5% на весь ассортимент\n"
@@ -341,6 +411,14 @@ async def process_promo(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "faq")
 async def process_faq(callback: CallbackQuery):
+    # 📊 Логируем действие
+    await log_user_action(
+        user_id=callback.from_user.id,
+        username=callback.from_user.username or "Нет username",
+        first_name=callback.from_user.first_name or "Аноним",
+        action="Нажал: Возврат"
+    )
+    
     await callback.message.answer(
         "📦 Отказ и возврат:\n"
         "Отказаться от заказа можно бесплатно в пункте выдачи — пока не забрали посылку\n\n"
@@ -351,6 +429,14 @@ async def process_faq(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "size_quiz")
 async def start_size_quiz(callback: CallbackQuery):
+    # 📊 Логируем действие
+    await log_user_action(
+        user_id=callback.from_user.id,
+        username=callback.from_user.username or "Нет username",
+        first_name=callback.from_user.first_name or "Аноним",
+        action="Начал подбор размера"
+    )
+    
     user_id = callback.from_user.id
     user_data[user_id] = {"step": "waiting_hips"}
     await callback.message.answer(
