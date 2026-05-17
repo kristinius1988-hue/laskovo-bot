@@ -25,6 +25,7 @@ async def get_db_conn():
 
 async def init_db():
     conn = await get_db_conn()
+    # Таблица для новинок
     await conn.execute('''
         CREATE TABLE IF NOT EXISTS new_arrivals (
             id SERIAL PRIMARY KEY,
@@ -35,12 +36,20 @@ async def init_db():
             added_at TIMESTAMP DEFAULT NOW()
         )
     ''')
+    # Таблица для контента (О нас, Комфорт)
+    await conn.execute('''
+        CREATE TABLE IF NOT EXISTS bot_content (
+            id SERIAL PRIMARY KEY,
+            content_type TEXT NOT NULL,
+            media_file_id TEXT NOT NULL,
+            media_type TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    ''')
     await conn.close()
 
 user_data = {}
-ABOUT_VIDEO_FILE_ID = None
 REVIEWS = []
-COMFORT_FILE_ID = None
 current_review = 0
 
 def get_main_keyboard():
@@ -62,13 +71,11 @@ async def cmd_start(message: Message):
     if message.from_user.id in user_data: 
         del user_data[message.from_user.id]
         
-    # 1. Приветствие и главное меню
     await message.answer(
         "Добро пожаловать в Ласково! 🌿\nНажимай на кнопку 👇", 
         reply_markup=get_main_keyboard()
     )
     
-    # 2. Инструкция по обновлению (твой текст)
     await message.answer(
         "✨ Бот постоянно обновляется!\n"
         "Мы добавляем новые функции, акции и товары 🎁\n\n"
@@ -90,29 +97,26 @@ async def handle_support_message(message: Message):
     if not admin_id: return
     await bot.send_message(admin_id, f"📩Новый вопрос:\n\n{message.text}\n\nID: {message.from_user.id}")
     await message.answer("✅ Сообщение отправлено! Ждите ответа.")
-    # =========================================
+
+# =========================================
 # 💬 ОТВЕТ АДМИНА ПОЛЬЗОВАТЕЛЮ
 # =========================================
 @dp.message(lambda msg: msg.reply_to_message and str(msg.from_user.id) == str(os.getenv("ADMIN_ID")))
 async def admin_reply(message: Message):
     """Когда админ отвечает Reply на сообщение с ID"""
     
-    # Берем текст сообщения, на которое ты отвечаешь
     original_text = message.reply_to_message.text
     
-    # Проверяем, есть ли там ID (формат: ID: 123456789)
     if "ID:" in original_text:
         user_id = original_text.split("ID:")[-1].strip()
         
         try:
-            # Отправляем твой ответ пользователю
             await bot.send_message(user_id, f"💬 **Ответ поддержки:**\n\n{message.text}")
             await message.answer("✅ Ответ отправлен клиенту!")
         except Exception as e:
             await message.answer(f"❌ Ошибка отправки: {e}")
     else:
-        # Если отвечаешь не на то сообщение
-        await message.answer("️ Отвечай (Reply) на сообщение, где есть ID пользователя!")
+        await message.answer("⚠️ Отвечай (Reply) на сообщение, где есть ID пользователя!")
 
 # =========================================
 # 🆕 НОВИНКИ (SUPABASE)
@@ -181,24 +185,51 @@ async def show_new_arrivals(callback: CallbackQuery):
     await callback.answer()
 
 # =========================================
-# ОСТАЛЬНЫЕ ФУНКЦИИ (отзывы, комфорт, о нас и т.д.)
+# 📹 СОХРАНЕНИЕ "О НАС" (в базу)
 # =========================================
-
 @dp.message(lambda message: message.video and message.caption and "#о_нас" in message.caption)
 async def save_about_video(message: Message):
-    global ABOUT_VIDEO_FILE_ID
-    ABOUT_VIDEO_FILE_ID = message.video.file_id
-    await message.answer("✅ **Видео для «О нас» сохранено!**")
+    media_file_id = message.video.file_id
+    
+    try:
+        conn = await get_db_conn()
+        await conn.execute("DELETE FROM bot_content WHERE content_type = 'about'")
+        await conn.execute(
+            "INSERT INTO bot_content (content_type, media_file_id, media_type) VALUES ($1, $2, $3)",
+            "about", media_file_id, "video"
+        )
+        await conn.close()
+        await message.answer("✅ **Видео для «О нас» сохранено в базу!**")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {e}")
 
+# =========================================
+# 📸 СОХРАНЕНИЕ "КОМФОРТ" (в базу)
+# =========================================
 @dp.message(lambda message: (message.photo or message.video) and message.caption and "#комфорт" in message.caption)
 async def save_comfort(message: Message):
-    global COMFORT_FILE_ID
     if message.photo:
-        COMFORT_FILE_ID = message.photo[-1].file_id
+        media_file_id = message.photo[-1].file_id
+        media_type = "photo"
     else:
-        COMFORT_FILE_ID = message.video.file_id
-    await message.answer("✅ **Раздел «Комфорт» сохранён!**")
+        media_file_id = message.video.file_id
+        media_type = "video"
+    
+    try:
+        conn = await get_db_conn()
+        await conn.execute("DELETE FROM bot_content WHERE content_type = 'comfort'")
+        await conn.execute(
+            "INSERT INTO bot_content (content_type, media_file_id, media_type) VALUES ($1, $2, $3)",
+            "comfort", media_file_id, media_type
+        )
+        await conn.close()
+        await message.answer("✅ **Раздел «Комфорт» сохранён в базу!**")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {e}")
 
+# =========================================
+# 💬 СОХРАНЕНИЕ ОТЗЫВОВ (в память)
+# =========================================
 @dp.message(lambda message: (message.photo or message.video) and message.caption and "#отзыв" in message.caption)
 async def save_review(message: Message):
     caption_text = message.caption.replace("#отзыв", "").strip()
@@ -212,6 +243,9 @@ async def save_review(message: Message):
     REVIEWS.append({"type": file_type, "file_id": file_id, "caption": caption_text})
     await message.answer(f"✅ **Отзыв сохранён!** Всего отзывов: {len(REVIEWS)}")
 
+# =========================================
+# 🧵 ПОКАЗ "КОМФОРТ" (из базы)
+# =========================================
 @dp.callback_query(lambda c: c.data == "comfort")
 async def process_comfort(callback: CallbackQuery):
     text = ("✨ Комфорт, который не замечаешь\n\n"
@@ -220,12 +254,28 @@ async def process_comfort(callback: CallbackQuery):
             "🤍 Невидимые — идеально под белые брюки, лосины, трикотаж и шёлк\n\n"
             "Забудь о бельё — помни только о комфорте 💛\n\n"
             "📋 Состав\nПолиамид + эластан. Ластовица из 100% хлопка\n\n")
-    if COMFORT_FILE_ID:
-        try: await callback.message.answer_photo(photo=COMFORT_FILE_ID, caption=text)
-        except: await callback.message.answer_video(video=COMFORT_FILE_ID, caption=text)
-    else: await callback.message.answer(text)
+    
+    try:
+        conn = await get_db_conn()
+        record = await conn.fetchrow("SELECT * FROM bot_content WHERE content_type = 'comfort' LIMIT 1")
+        await conn.close()
+        
+        if record:
+            if record['media_type'] == "photo":
+                await callback.message.answer_photo(photo=record['media_file_id'], caption=text)
+            else:
+                await callback.message.answer_video(video=record['media_file_id'], caption=text)
+        else:
+            await callback.message.answer(text)
+    except Exception as e:
+        await callback.message.answer(f"Ошибка: {e}")
+        await callback.message.answer(text)
+    
     await callback.answer()
 
+# =========================================
+# 💬 ПОКАЗ ОТЗЫВОВ (из памяти)
+# =========================================
 @dp.callback_query(lambda c: c.data == "reviews")
 async def show_reviews(callback: CallbackQuery):
     global current_review
@@ -268,6 +318,9 @@ async def prev_review(callback: CallbackQuery):
         await show_review(callback, current_review)
     await callback.answer()
 
+# =========================================
+# ℹ️ ПОКАЗ "О НАС" (из базы)
+# =========================================
 @dp.callback_query(lambda c: c.data == "about")
 async def process_about(callback: CallbackQuery):
     text = ("🌿 Ласково — бельё, которое мы создаем, а не перепродаем\n\n"
@@ -280,10 +333,20 @@ async def process_about(callback: CallbackQuery):
             "• Комфорт, который не замечаешь, но чувствуешь.\n\n"
             "💛 Наша философия:\n"
             "«Идеальное бельё — это когда о нём забываешь, но чувствуешь себя в нём невероятно».")
-    if ABOUT_VIDEO_FILE_ID:
-        await callback.message.answer_video(video=ABOUT_VIDEO_FILE_ID, caption=text)
-    else:
+    
+    try:
+        conn = await get_db_conn()
+        record = await conn.fetchrow("SELECT * FROM bot_content WHERE content_type = 'about' LIMIT 1")
+        await conn.close()
+        
+        if record:
+            await callback.message.answer_video(video=record['media_file_id'], caption=text)
+        else:
+            await callback.message.answer(text)
+    except Exception as e:
+        await callback.message.answer(f"Ошибка: {e}")
         await callback.message.answer(text)
+    
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "promo")
