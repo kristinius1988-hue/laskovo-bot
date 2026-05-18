@@ -220,7 +220,6 @@ async def save_comfort(message: Message):
     except Exception as e:
         await message.answer(f"❌ Ошибка: {e}")
 
-# ✅ ИСПРАВЛЕНО: было msg.video, должно быть message.video
 @dp.message(lambda message: (message.photo or message.video) and message.caption and "#отзыв" in message.caption)
 async def save_review(message: Message):
     caption_text = message.caption.replace("#отзыв", "").strip() or "💬 Отзыв клиентки Ласково"
@@ -456,15 +455,18 @@ def calculate_size(hips, waist):
     elif hips <= 110 and waist <= 82: return "48-50"
     else: return "50-52"
 
+# =========================================
+# ЗАПУСК
+# =========================================
 async def main():
     await init_db()
     print("✅ База данных подключена!")
     
-    # Добавляем простой маршрут для UptimeRobot
+    # 🌐 Health check для UptimeRobot
     app = web.Application()
     
     async def health_check(request):
-        return web.Response(text="Bot is running! 💛", content_type='text/html')
+        return web.Response(text="<h1>Bot is running! 💛</h1>", content_type='text/html')
     
     app.router.add_get('/', health_check)
     
@@ -474,7 +476,8 @@ async def main():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
     print(f"✅ Порт открыт на {port}")
-    print(f"✅ Health check доступен на /")
+    print(f"✅ Health check доступен на http://localhost:{port}/")
+    
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
